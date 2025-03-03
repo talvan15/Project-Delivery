@@ -14,3 +14,5 @@ class Usuario(Pessoa):
 
     def atualizar_endereco(self, endereco):
         self._endereco = endereco
+
+  
