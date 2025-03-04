@@ -8,6 +8,12 @@ from entregador import Entregador
 # Lista global para armazenar os usuários cadastrados
 usuarios_cadastrados = []
 
+# Lista global para armazenar os itens no carrinho
+carrinho = []  # Carrinho global
+
+# Lista global para armazenar os pedidos realizados
+pedidos_realizados = []  # Para armazenar os pedidos confirmados
+
 # Função para exibir a tela de cadastro
 def cadastro_page(page: ft.Page):
     page.clean()  # Limpa a tela antes de adicionar os novos componentes
@@ -124,17 +130,114 @@ def show_menu(page: ft.Page, restaurante: Restaurante):
     page.clean()
     page.add(ft.Text(f"Cardápio do {restaurante._nome}:", size=20))
 
-    def add_item_to_order(selected_item_idx):
-        item = restaurante._cardapio[selected_item_idx]
-        if item:
-            page.add(ft.Text(f"Item {item._nome} adicionado ao pedido"))
-
+    # Exibindo o cardápio numerado
     for idx, item in enumerate(restaurante._cardapio, 1):
-        button = ft.ElevatedButton(item._nome, on_click=lambda e, idx=idx-1: add_item_to_order(idx))
-        page.add(button)
+        page.add(ft.Text(f"{idx}. {item._nome} - R${item._preco}", size=16))
+
+    # Input para adicionar item ao carrinho
+    item_input = ft.TextField(label="Digite o nome ou número do item")
+    add_item_button = ft.ElevatedButton("Adicionar ao Carrinho", on_click=lambda e: add_item_to_cart(page, item_input, restaurante))
+
+    # Exibir o botão para ver carrinho
+    ver_carrinho_button = ft.ElevatedButton("Ver Carrinho", on_click=lambda e: show_cart(page, restaurante))
+    
+    page.add(item_input, add_item_button, ver_carrinho_button)
 
     back_button = ft.ElevatedButton("Voltar", on_click=lambda e: show_restaurant_selection(page))
     page.add(back_button)
+
+# Função para adicionar item ao carrinho
+def add_item_to_cart(page: ft.Page, item_input: ft.TextField, restaurante: Restaurante):
+    global carrinho  # Declara que estamos modificando a variável global carrinho
+    item_selecionado = None
+    item_input_value = item_input.value  # Pega o valor digitado no campo de texto
+    
+    # Verificar se é um número ou nome
+    try:
+        item_idx = int(item_input_value) - 1  # Converter para índice
+        if 0 <= item_idx < len(restaurante._cardapio):
+            item_selecionado = restaurante._cardapio[item_idx]
+    except ValueError:
+        # Se não for número, procurar pelo nome
+        for item in restaurante._cardapio:
+            if item._nome.lower() == item_input_value.lower():
+                item_selecionado = item
+                break
+    
+    if item_selecionado:
+        carrinho.append(item_selecionado)
+        page.add(ft.Text(f"{item_selecionado._nome} adicionado ao carrinho"))
+    else:
+        page.add(ft.Text("Item não encontrado", color="red"))
+
+    # Limpar o campo de entrada após adicionar o item
+    item_input.value = ""  # Limpa o campo de texto
+    page.update()  # Atualiza a página para refletir a mudança no campo de texto
+
+# Função para exibir o carrinho
+def show_cart(page: ft.Page, restaurante: Restaurante):
+    page.clean()
+    if carrinho:
+        total = sum(item._preco for item in carrinho)
+        page.add(ft.Text("Carrinho:", size=20))
+        for item in carrinho:
+            page.add(ft.Text(f"{item._nome} - R${item._preco}", size=16))
+        page.add(ft.Text(f"Total: R${total:.2f}", size=20))
+
+        # Botão para finalizar compra
+        finalizar_button = ft.ElevatedButton("Finalizar Compra", on_click=lambda e: show_payment_page(page))
+        page.add(finalizar_button)
+    else:
+        page.add(ft.Text("Carrinho vazio", size=20))
+
+    back_button = ft.ElevatedButton("Voltar ao cardápio", on_click=lambda e: show_menu(page, restaurante))
+    page.add(back_button)
+
+# Função para exibir a página de pagamento
+def show_payment_page(page: ft.Page):
+    page.clean()
+    page.add(ft.Text("Confirmação de pagamento", size=20))
+
+    nome_input = ft.TextField(label="Nome de usuário", autofocus=True)
+    senha_input = ft.TextField(label="Senha", password=True)
+
+    confirm_payment_button = ft.ElevatedButton("Confirmar Pagamento", on_click=lambda e: confirm_payment(page, nome_input, senha_input))
+    
+    page.add(nome_input, senha_input, confirm_payment_button)
+
+# Função para confirmar o pagamento
+def confirm_payment(page: ft.Page, nome_input: ft.TextField, senha_input: ft.TextField):
+    nome = nome_input.value
+    senha = senha_input.value
+    
+    if nome and senha:
+        usuario = verificar_usuario(nome, senha)
+        if usuario:
+            # Criando o pedido
+            pedido = Pedido(usuario, "Restaurante", carrinho)  # Criação do pedido
+            pedidos_realizados.append(pedido)  # Armazenando o pedido
+            
+            # Criando o entregador
+            entregador = Entregador("João", "123456789", "Moto")  # Passando o veículo agora
+            entregador.atribuir_pedido(pedido)  # Atribuindo o pedido ao entregador
+            
+            page.clean()
+            page.add(ft.Text("Pagamento realizado com sucesso!", size=20))
+            page.add(ft.Text(f"Pedido será entregue por {entregador._nome}", size=20))  # Exibindo entregador
+
+            # Botão para realizar outro pedido
+            realizar_outro_pedido_button = ft.ElevatedButton("Realizar outro pedido", on_click=lambda e: restart_order(page))
+            page.add(realizar_outro_pedido_button)
+        else:
+            page.add(ft.Text("Nome de usuário ou senha incorretos", color="red"))
+    else:
+        page.add(ft.Text("Por favor, preencha todos os campos", color="red"))
+
+# Função para reiniciar o pedido
+def restart_order(page: ft.Page):
+    global carrinho  # Limpa o carrinho global
+    carrinho = []
+    show_restaurant_selection(page)
 
 # Função para rodar o app
 def main(page: ft.Page):
